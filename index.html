@@ -1,0 +1,232 @@
+<html><head>
+  
+      <!-- Uses Parse and CreateJS -->
+  <script src="https://parse.com/downloads/javascript/parse-1.6.7.js"></script>
+  <script type="text/javascript" src="https://code.createjs.com/createjs-2013.02.12.min.js"></script>
+  
+  
+  
+  <style type="text/css">
+  </style>
+  
+
+
+<script type="text/javascript">//<![CDATA[
+window.onload=function(){
+//Get canvas and scale it to fit full screen.
+var canvas = document.getElementById("Canvas");
+canvas.width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+canvas.width *=.95;
+canvas.height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+canvas.height *=.95;
+
+//global variables
+var player;
+var stage;
+var assets;
+var loader;
+var stageHeight = canvas.height;
+var stageWidth = canvas.width;
+
+//default player stuff
+var playerHeight = 10;
+var playerWidth = 10;
+var playerSize = 10;
+var easingAmount = 0.1;
+var maxDeltaP=50;
+var text;
+var timerText;
+var highscoreText;
+
+//initialize stage
+stage = new createjs.Stage(canvas);
+assets = [];
+manifest = [{
+    src: "player.png",
+    id: "character"
+}];
+
+loader = new createjs.LoadQueue(false);
+loader.onComplete = handleComplete;
+loader.onFileLoad = handleFileLoad;
+loader.loadManifest(manifest);
+
+function handleFileLoad(event) {
+    //set default player stuff
+    var id = event.item.id;
+    var result = loader.getResult(id);
+    player =   new createjs.Shape();
+    player.graphics.beginFill("red").drawCircle(5,5, playerSize);
+    player.x = (stageWidth / 2) - playerWidth;
+    player.y = stageHeight/2 - playerHeight;
+    player.regX = playerWidth/2;
+    player.regY = playerHeight/2;
+}
+
+function handleComplete() {
+    //initialize text and add player and starting text
+    stage.addChild(player);
+    text = new createjs.Text("Click To Activate", "20px Arial", "#000000");
+    text.x = stageWidth/2;
+    mode = "GAME";
+    text.y = stageHeight / 2;
+    timerText = new createjs.Text("0:00", "20px Arial", "#000000");
+    text.x = stageWidth/2;
+    text.y = 100;
+    highscoreText = new createjs.Text("Highscores\n","20px Arial","#000000");
+    stage.addChild(text);
+    stage.update();
+}
+
+stage.onMouseDown = function () {
+    //start game on mouse click.
+    stage.removeChild(text);
+    createjs.Ticker.addEventListener("tick", tick);
+    createjs.Ticker.setFPS(100);
+    //reset in highscore section.
+    if(mode=="SCORE")
+    {
+        highscores = [];
+        highscoreText.text = "Highscores\n";
+        stage.removeAllChildren();
+        mode ="GAME";
+        playerSize =10;
+        player.radius= 10;
+        player.regX = player.regY = playerSize/2;
+        player.graphics.clear();
+        player.graphics.beginFill("red").drawCircle(playerSize/2,playerSize/2,playerSize);
+        stage.addChild(player);
+        ms=0;
+        s=0;
+        maxDeltaP = 50;
+    }
+    stage.addChild(timerText);
+    stage.update();
+};
+
+var tickCount =0;
+var dots = [];
+var ms=0;
+var s=0;
+var mode = "";
+var highscores = [];
+function tick(event) {
+    if(mode=="GAME"){
+        //move the player.
+        
+        //get delta x and y and move based on an easing amount (for smooth movement), up to a max
+        //which is defined by player size.
+   var xDistance = stage.getStage().mouseX - player.x;
+   var yDistance = stage.getStage().mouseY - player.y;
+   var distance = Math.sqrt(xDistance * xDistance + yDistance * yDistance);
+    if (distance > .01) {
+     //move up to a limited max amount.
+        player.x += (xDistance>0) ?  Math.min(xDistance * easingAmount,maxDeltaP) : Math.max(xDistance * easingAmount,-maxDeltaP);
+        player.y += (yDistance>0)? Math.min(yDistance * easingAmount,maxDeltaP) : Math.max(yDistance * easingAmount,-maxDeltaP);
+    }
+    for(var i=0;i<dots.length;i++)
+    {
+        //check collision.
+        if(Math.pow(((player.x)-dots[i].x),2)+Math.pow(((player.y)-dots[i].y),2)<= Math.pow((playerSize+5),2))
+        {
+            //increase size and change speed.
+            playerSize+=.5;
+            maxDeltaP = (10/playerSize)*50;
+            player.radius = playerSize;
+            stage.removeChild(dots[i].circle);
+            player.regX = player.regY = playerSize/2;
+            player.graphics.clear();
+            player.graphics.beginFill("red").drawCircle(playerSize/2,playerSize/2,playerSize);
+            dots.splice(i,1);
+        }
+    }
+    tickCount++;
+    //randomly add dots at a max of once per 5 ticks.
+    if(tickCount>5 && Math.random()>.6)
+    {
+        tickCount =0;
+        var tempCirc = new createjs.Shape();
+        var circX = Math.random()*stageWidth
+        var circY = Math.random()*stageHeight
+        dots.push({circle: tempCirc, x: circX, y: circY});
+        var color  = '#'+(Math.random()*0xFFFFFF<<0).toString(16);
+        tempCirc.graphics.beginFill(color).drawCircle(circX,circY,5);
+        stage.addChild(tempCirc);
+    }
+    //timer.
+    if((ms!=0 || s!=0) || dots.length >0)
+    {
+        ms++;
+        if(ms==100)
+        {
+            ms=0;
+            s++;
+        }
+        //if time is up, highscore.
+        if(s==60)
+        {
+            stage.removeAllChildren();
+            mode="SCORE";
+            loadScores();
+            highscoreText.x = stageWidth/2;
+            highscoreText.y = 300;
+            stage.addChild(highscoreText);
+        }
+        else
+        timerText.text = s.toString().concat(":",ms);
+        //timerText.text = createjs.Ticker.getTime();
+    }
+    }
+    else if(mode=="SCORE")
+    {
+    }
+    stage.update();
+}
+
+function loadScores(){
+    //load highscores from Parse.
+    Parse.initialize("07IF050adgqMO9UlEYl2wPKLWc0ybuW2REE3dwMs", "lIMVAmpaqahjMe2F1F9E18Y0IcvG2OAn5tWxF82g");
+    var HighScore = new Parse.Object.extend("HighScore");
+    var query = new Parse.Query(HighScore);
+    var yourScore = new HighScore();
+    yourScore.set("Score", playerSize);
+    query.find({
+    success: function (results) {
+        //add your score to the list.
+        results.push(yourScore)
+        results.sort(function(a,b){
+            return b.get("Score") -a.get("Score");
+        })
+        var maxLength = Math.min(results.length,10);
+        //get top 10 scores.
+        for (var i = 0; i < maxLength; i++) {
+            highscores.push(results[i].get("Score"));
+            highscoreText.text = highscoreText.text.concat((i+1) + ". " + results[i].get("Score") + "\n");
+        }
+        //notify made top 10.
+        if(highscores.indexOf(playerSize)!=-1)
+        highscoreText.text = highscoreText.text.concat("You successfully placed on the highscores with a score of " + playerSize + ".");
+        highscoreText.text = highscoreText.text.concat("\nClick to play again!");
+    yourScore.save();
+        
+    },
+    error: function (error) {
+        alert("Error: " + error.code + " " + error.message);
+    }
+});
+    
+}//]]> 
+}
+</script>
+
+</head>
+
+
+<body>
+  <canvas id="Canvas" width="550" height="600"></canvas>
+  
+
+
+
+
+</body></html>
